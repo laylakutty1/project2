@@ -91,8 +91,7 @@ clust <- Data %>% mutate(cluster = as.factor(Data_pam$clustering))
 clust %>% ggpairs(columns = 1:6, aes(color = cluster))
 ```
 
-Discussion of clustering here
-    
+The PAM clustering indicates that there is a negative correlation between diagnosis and all of the other variables. This means that when the numeric variables are lower, there is a lesser chance of having a positive diagnosis for breast cancer. This would make sense! The filled in graphs also demonstrate this, as every blue cluster (diagnosis = positive) is more towards the left, while the red clusters (diagnosis = negative) is more towards the right. Additionally, the average sillhouette width was 0.69, which indicates that a reasonable structure has been found (the final fit of this cluster is reasonable).
     
 ### Dimensionality Reduction with PCA
 
@@ -138,7 +137,7 @@ for(i in 1:k){
 summarize_all(diags,mean)
 ```
 
-Discussion here
+The AUC value from the linear classification is very high (0.9816), indicating that the model is doing well at predicting new observations. This is also true for the CV AUC (0.9837). Because the CV AUC was actually only a little bit higher than the other AUC, there was not overfitting, meaning it is doing a good job at predicting the data.
 
 ### Non-Parametric Classifier
 
@@ -170,7 +169,7 @@ for(i in 1:k){
 summarize_all(diags,mean)
 ```
 
-Discussion
+The AUC value from the linear classification is very high (0.9752), indicating that the model is doing well at predicting new observations. This is also true for the CV AUC (0.92819), however  the CV AUC was actually a little bit lower than the other AUC. This indicates signs of overfitting, meaning it may not actually be doing as good job of a job at predicting the data. Compared to the linear classification, the non-parametric classification is not doing as good of a job at predicting the data. This is seen by the fact that there is overfitting in the non-parametric classification and both AUCs are lower than the AUCs seen in the linear classification.
 
 
 ### Regression/Numeric Prediction
@@ -195,24 +194,27 @@ for(i in 1:k){
   ## Get predictions/y-hats on test set (fold i)
   yhat<-predict(fit,newdata=test)
   ## Compute prediction error  (MSE) for fold i
-  diags<-mean((Data$mean_radius-probs)^2) 
+  diags<-mean((Data$mean_radius-yhat)^2) 
 }
 mean(diags)
 ```
 
-Discussion
+The MSE for the overall dataset was found to be 0.03341835. The average MSE across all of me k testing folds, however, was found to be 22.53625. This drastic difference indicates that there is definitely overfitting. This means that it is not doing a good job at predicting new observations as seen in the other classification and CV.
 
 ### Python 
 
 ```{R}
 library(reticulate)
+use_python("/usr/bin/python3")
+py$Data
 ```
 
 ```{python}
-r.mean_radius
+Data = r.Data
+r.Data
 ```
 
-Discussion
+I took the data from my environment and used r.Data to share the object in python. I also used py$Data to then share the same object in R.
 
 ### Concluding Remarks
 
