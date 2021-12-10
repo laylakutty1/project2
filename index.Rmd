@@ -46,26 +46,49 @@ class_diag <- function(score, truth, positive, cutoff=.5){
 
 # Mining, Classification, Prediction
 
-## Name and EID here
+## Layla Kutty lak2378
 
 ### Introduction 
 
 Paragraph or two introducing your datasets and variables, why they are interesting to you, etc. See instructions for more information
+I chose the "Breast Cancer Data" dataset because oncology is a big interest of mine as a pre-med student! I found the data on Kaggle, but it was taken from the University of Wisconsin Hospitals, Madison from Dr. William H. Wolberg. 
+
+This dataset contains information related to the size of a lump when diagnosing breast cancer. The numeric variables that describe the lump are mean radius, mean texture, mean perimeter, mean area, and mean smoothness. The last variable is a binary variable known as "diagnosis" which determines whether that lump indicated the diagnosis of breast cancer. However, the data does not tell me what it was measured in. There are a total of 569 observations, 212 of which had a negative diagnosis (0) and 357 of which had a positive diagnosis (1) of breast cancer.
 
 ```{R}
 library(tidyverse)
-# read your datasets in here, e.g., with read_csv()
-
-# if your dataset needs tidying, do so here
-
-# any other code here
+Data <- read_csv('Breast_cancer_data.csv')
 ```
 
 ### Cluster Analysis
 
 ```{R}
 library(cluster)
-# clustering code here
+sil_width <- vector()
+for (i in 2:10) {
+    pam_fit <- pam(Data, k = i)
+    sil_width[i] <- pam_fit$silinfo$avg.width
+}
+
+ggplot() + geom_line(aes(x = 1:10, y = sil_width)) + 
+    scale_x_continuous(name = "k", breaks = 1:10)
+#k=2
+
+Data_pam <- Data %>% pam(k = 2)
+plot(Data_pam, which = 2)
+
+pam1 <- Data %>% pam(k=2)
+pamclust <- Data %>% mutate(cluster=as.factor(pam1$clustering))
+#pamclust %>% ggplot(aes(mean_radius, mean_texture, color=cluster)) + geom_point()
+#pamclust %>% ggplot(aes(mean_perimeter, mean_area, color=cluster)) + geom_point()
+#pamclust %>% ggplot(aes(mean_area, mean_smoothness, color=cluster)) + geom_point()
+
+pamclust %>% group_by(cluster) %>% summarize_if(is.numeric,mean,na.rm=T)
+Data%>%slice(pam1$id.med)
+
+library(GGally)
+clust <- Data %>% mutate(cluster = as.factor(Data_pam$clustering))
+clust %>% ggpairs(columns = 1:6, aes(color = cluster))
 ```
 
 Discussion of clustering here
@@ -74,19 +97,45 @@ Discussion of clustering here
 ### Dimensionality Reduction with PCA
 
 ```{R}
-# PCA code here
+Data_nums<-Data %>% select_if(is.numeric) %>% scale
+Data_pca<-princomp(Data_nums)
+names(Data_pca)
+summary(Data_pca, loadings=T)
+
+Dataf<-data.frame(PC1=Data_pca$scores[, 1],PC2=Data_pca$scores[, 2])
+ggplot(Dataf, aes(PC1, PC2)) + geom_point()
 ```
 
-Discussions of PCA here. 
+I retained PC1 and PC2 because they got me to 81% total variance explained. For PC1, if you score high overall, that means the lump has a large radius, is more textured, has a large perimeter and area, is more smooth, and is less likely to be a positive diagnosis of breast cancer. For PC2, if you score high overall, the lump is very textured and is more likely to be diagnosed as breast cancer, but the lump will be less smooth. The opposite is true if you score low for PC1 or PC2. 
 
 ###  Linear Classifier
 
 ```{R}
-# linear classifier code here
+fit <- glm(diagnosis ~ ., data=Data)
+probs <- predict(fit, type="response")
+class_diag(probs, Data$diagnosis, positive=1) 
+table(truth = Data$diagnosis, predictions = probs>.5)
+
 ```
 
 ```{R}
-# cross-validation of linear classifier here
+k=10 #choose number of folds
+fdata<-Data[sample(nrow(Data)),] #randomly order rows
+folds<-cut(seq(1:nrow(Data)),breaks=k,labels=F) #create folds
+diags<-NULL
+for(i in 1:k){
+  ## Create training and test sets
+  train<-fdata[folds!=i,] 
+  test<-fdata[folds==i,]
+  truth<-test$diagnosis ## Truth labels for fold i
+  ## Train model on training set (all but fold i)
+  fit<-glm(diagnosis~.,data=train,family="binomial")
+  ## Test model on test set (fold i) 
+  probs<-predict(fit,newdata = test,type="response")
+  ## Get diagnostics for fold i
+  diags<-rbind(diags,class_diag(probs,truth, positive=1))
+}
+summarize_all(diags,mean)
 ```
 
 Discussion here
@@ -95,11 +144,30 @@ Discussion here
 
 ```{R}
 library(caret)
-# non-parametric classifier code here
+fit <- knn3(diagnosis ~ ., data=Data)
+probs <- predict(fit, newdata=Data)[,2]
+class_diag(probs, Data$diagnosis, positive=1) 
+table(truth = Data$diagnosis, predictions = probs>0.5)
 ```
 
 ```{R}
-# cross-validation of np classifier here
+k=10 #choose number of folds
+fdata<-Data[sample(nrow(Data)),] #randomly order rows
+folds<-cut(seq(1:nrow(Data)),breaks=k,labels=F) #create folds
+diags<-NULL
+for(i in 1:k){
+  ## Create training and test sets
+  train<-fdata[folds!=i,] 
+  test<-fdata[folds==i,]
+  truth<-test$diagnosis ## Truth labels for fold i
+  ## Train model on training set (all but fold i)
+  fit<-knn3(diagnosis~.,data=train)
+  ## Test model on test set (fold i) 
+  probs<-predict(fit,newdata = test)[,2]
+  ## Get diagnostics for fold i
+  diags<-rbind(diags,class_diag(probs,truth, positive=1))
+}
+summarize_all(diags,mean)
 ```
 
 Discussion
@@ -108,11 +176,28 @@ Discussion
 ### Regression/Numeric Prediction
 
 ```{R}
-# regression model code here
+fit <- glm(mean_radius~., data=Data)
+probs <- predict(fit, type="response")
+mean((Data$mean_radius-probs)^2)
 ```
 
 ```{R}
-# cross-validation of regression model here
+k=5 #choose number of folds
+fdata<-Data[sample(nrow(Data)),] #randomly order rows
+folds<-cut(seq(1:nrow(Data)),breaks=k,labels=F) #create folds
+diags<-NULL
+for(i in 1:k){
+  ## Create training and test sets
+  train<-fdata[folds!=i,] 
+  test<-fdata[folds==i,]
+  ## Fit linear regression model to training set
+  fit<-lm(mean_radius~.,data=train)
+  ## Get predictions/y-hats on test set (fold i)
+  yhat<-predict(fit,newdata=test)
+  ## Compute prediction error  (MSE) for fold i
+  diags<-mean((Data$mean_radius-probs)^2) 
+}
+mean(diags)
 ```
 
 Discussion
@@ -124,7 +209,7 @@ library(reticulate)
 ```
 
 ```{python}
-# python code here
+r.mean_radius
 ```
 
 Discussion
